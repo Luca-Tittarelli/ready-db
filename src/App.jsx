@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Analytics } from "@vercel/analytics/react"
 import Header from './components/Header';
 import Toolbar from './components/Toolbar';
 import Canvas from './components/Canvas';
@@ -139,6 +140,8 @@ export default function App() {
                     sql={dbState.generateSQL()}
                 />
             )}
+            
+            <Analytics />
         </div>
     );
 }
