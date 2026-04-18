@@ -1,0 +1,429 @@
+import { useState, useEffect, useRef, useCallback } from 'react';
+import upop from 'upop';
+
+const STORAGE_KEY = 'db-maker-design';
+
+const sampleData = {
+    tables: [
+        {
+            id: 'sample-1',
+            name: 'users',
+            x: 80,
+            y: 80,
+            color: '#007AFF', // Apple Blue
+            columns: [
+                { id: 'sample-1-c1', name: 'id', type: 'serial', pk: true, nullable: false },
+                { id: 'sample-1-c2', name: 'username', type: 'varchar', pk: false, nullable: false },
+                { id: 'sample-1-c3', name: 'email', type: 'varchar', pk: false, nullable: false }
+            ]
+        },
+        {
+            id: 'sample-2',
+            name: 'posts',
+            x: 420,
+            y: 120,
+            color: '#FF9500', // Apple Orange
+            columns: [
+                { id: 'sample-2-c1', name: 'id', type: 'serial', pk: true, nullable: false },
+                { id: 'sample-2-c2', name: 'user_id', type: 'integer', pk: false, nullable: false },
+                { id: 'sample-2-c3', name: 'title', type: 'varchar', pk: false, nullable: false }
+            ]
+        }
+    ],
+    connections: [
+        {
+            id: 'conn-1',
+            fromTableId: 'sample-2',
+            fromColId: 'sample-2-c2',
+            toTableId: 'sample-1',
+            toColId: 'sample-1-c1',
+            relationType: '1:n'
+        }
+    ],
+    dialect: 'postgres'
+};
+
+export function useDBState() {
+    const [tables, setTables] = useState(() => {
+        try {
+            const saved = localStorage.getItem(STORAGE_KEY);
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                return parsed.tables || [];
+            }
+        } catch (e) {
+            console.error('Error loading tables from localStorage', e);
+        }
+        return sampleData.tables;
+    });
+
+    const [connections, setConnections] = useState(() => {
+        try {
+            const saved = localStorage.getItem(STORAGE_KEY);
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                return parsed.connections || [];
+            }
+        } catch (e) {}
+        return sampleData.connections;
+    });
+    
+    const [sqlDialect, setSqlDialect] = useState(() => {
+        try {
+            const saved = localStorage.getItem(STORAGE_KEY);
+            if (saved) return JSON.parse(saved).dialect || 'postgres';
+        } catch (e) {}
+        return sampleData.dialect;
+    });
+
+    const [selectedTableId, setSelectedTableId] = useState(null);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [viewMode, setViewMode] = useState('design');
+
+    const [connectingFK, setConnectingFK] = useState(null);
+
+    // Auto-save
+    useEffect(() => {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({ tables, connections, dialect: sqlDialect }));
+    }, [tables, connections, sqlDialect]);
+
+    const canvasRef = useRef(null);
+    const dragging = useRef({ id: null, offsetX: 0, offsetY: 0, requestedFrame: null });
+
+    function createTable(newTableName) {
+        if (!newTableName.trim()) return;
+        const id = Date.now().toString();
+        const colors = ['#007AFF', '#34C759', '#FF9500', '#FF3B30', '#5856D6', '#FF2D55']; // Apple system colors
+        const randomColor = colors[Math.floor(Math.random() * colors.length)];
+
+        const t = {
+            id,
+            name: newTableName.trim(),
+            x: 100 + (tables.length % 5) * 40,
+            y: 100 + (tables.length % 5) * 40,
+            color: randomColor,
+            columns: [
+                { 
+                    id: id + '-c1', 
+                    name: 'id', 
+                    type: sqlDialect === 'postgres' ? 'serial' : 
+                          sqlDialect === 'mysql' ? 'int AUTO_INCREMENT' : 'INTEGER', 
+                    pk: true, 
+                    nullable: false 
+                }
+            ]
+        };
+        setTables(prev => [...prev, t]);
+        setSelectedTableId(id);
+    }
+
+    function addColumn(tableId) {
+        setTables(prev => prev.map(t => {
+            if (t.id !== tableId) return t;
+            const colId = t.id + '-c' + Date.now();
+            return { 
+                ...t, 
+                columns: [...t.columns, { 
+                    id: colId, 
+                    name: 'new_column', 
+                    type: 'varchar(255)', 
+                    pk: false, 
+                    nullable: true,
+                    defaultValue: ''
+                }] 
+            };
+        }));
+    }
+
+    const updateColumn = useCallback((tableId, colId, patch) => {
+        setTables(prev => prev.map(t => {
+            if (t.id !== tableId) return t;
+            return {
+                ...t,
+                columns: t.columns.map(c => c.id === colId ? { ...c, ...patch } : c)
+            };
+        }));
+    }, []);
+
+    const removeColumn = useCallback((tableId, colId) => {
+        setTables(prev => prev.map(t => {
+            if (t.id !== tableId) return t;
+            return { ...t, columns: t.columns.filter(c => c.id !== colId) };
+        }));
+        setConnections(prev => prev.filter(c => c.fromColId !== colId && c.toColId !== colId));
+    }, []);
+
+    function removeTable(tableId) {
+        setTables(prev => prev.filter(t => t.id !== tableId));
+        setConnections(prev => prev.filter(c => c.fromTableId !== tableId && c.toTableId !== tableId));
+        if (selectedTableId === tableId) setSelectedTableId(null);
+    }
+
+    function duplicateTable(tableId) {
+        const original = tables.find(t => t.id === tableId);
+        if (!original) return;
+        
+        const newId = Date.now().toString();
+        const duplicated = {
+            ...original,
+            id: newId,
+            name: original.name + '_copy',
+            x: original.x + 40,
+            y: original.y + 40,
+            columns: original.columns.map(col => ({
+                ...col,
+                id: newId + '-c' + col.id.split('-c')[1] + Math.floor(Math.random()*1000)
+            }))
+        };
+        
+        setTables(prev => [...prev, duplicated]);
+        setSelectedTableId(newId);
+    }
+
+    // --- Table Dragging Optimized with requestAnimationFrame ---
+    const onMouseDownTable = useCallback((e, table) => {
+        if (e.target.tagName.toLowerCase() === 'input' || e.target.tagName.toLowerCase() === 'button' || e.target.closest('.port')) {
+            return;
+        }
+        dragging.current.id = table.id;
+        dragging.current.offsetX = e.clientX - table.x;
+        dragging.current.offsetY = e.clientY - table.y;
+        setSelectedTableId(table.id);
+        
+        window.addEventListener('mousemove', onMouseMove);
+        window.addEventListener('mouseup', onMouseUp);
+    }, []);
+
+    function onMouseMove(e) {
+        const id = dragging.current.id;
+        if (!id) return;
+        
+        if (dragging.current.requestedFrame) {
+            cancelAnimationFrame(dragging.current.requestedFrame);
+        }
+
+        // Use requestAnimationFrame for smooth 60fps execution
+        dragging.current.requestedFrame = requestAnimationFrame(() => {
+            setTables(prev => prev.map(t => 
+                t.id === id ? { 
+                    ...t, 
+                    x: e.clientX - dragging.current.offsetX, 
+                    y: e.clientY - dragging.current.offsetY 
+                } : t
+            ));
+        });
+    }
+
+    function onMouseUp() {
+        dragging.current.id = null;
+        if (dragging.current.requestedFrame) {
+            cancelAnimationFrame(dragging.current.requestedFrame);
+        }
+        window.removeEventListener('mousemove', onMouseMove);
+        window.removeEventListener('mouseup', onMouseUp);
+    }
+
+    // --- Connection Dragging ---
+    const connectionDragging = useRef({ active: false, requestedFrame: null });
+
+    const startConnection = useCallback((e, tableId, colId) => {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        const canvasRect = canvasRef.current.getBoundingClientRect();
+        const startX = e.clientX - canvasRect.left;
+        const startY = e.clientY - canvasRect.top;
+
+        connectionDragging.current.active = true;
+        connectionDragging.current.fromTableId = tableId;
+        connectionDragging.current.fromColId = colId;
+
+        setConnectingFK({
+            fromTableId: tableId,
+            fromColId: colId,
+            startX,
+            startY,
+            currentX: startX,
+            currentY: startY
+        });
+
+        window.addEventListener('mousemove', onConnectionMove);
+        window.addEventListener('mouseup', onConnectionUp);
+    }, []);
+
+    function onConnectionMove(e) {
+        if (!connectionDragging.current.active) return;
+        
+        if (connectionDragging.current.requestedFrame) {
+            cancelAnimationFrame(connectionDragging.current.requestedFrame);
+        }
+        
+        connectionDragging.current.requestedFrame = requestAnimationFrame(() => {
+            const canvasRect = canvasRef.current.getBoundingClientRect();
+            setConnectingFK(prev => {
+                if (!prev) return null;
+                return {
+                    ...prev,
+                    currentX: e.clientX - canvasRect.left + canvasRef.current.scrollLeft,
+                    currentY: e.clientY - canvasRect.top + canvasRef.current.scrollTop
+                };
+            });
+        });
+    }
+
+    function onConnectionUp() {
+        connectionDragging.current.active = false;
+        connectionDragging.current.fromTableId = null;
+        connectionDragging.current.fromColId = null;
+        if (connectionDragging.current.requestedFrame) {
+            cancelAnimationFrame(connectionDragging.current.requestedFrame);
+        }
+        setConnectingFK(null);
+        window.removeEventListener('mousemove', onConnectionMove);
+        window.removeEventListener('mouseup', onConnectionUp);
+    }
+
+    const completeConnection = useCallback((toTableId, toColId) => {
+        if (!connectionDragging.current.active) return;
+        
+        const fromTableId = connectionDragging.current.fromTableId;
+        const fromColId = connectionDragging.current.fromColId;
+
+        if (!fromTableId || !fromColId) return;
+
+        if (fromTableId === toTableId) {
+            if (fromColId === toColId) return;
+        }
+
+        const newConn = {
+            id: 'conn-' + Date.now(),
+            fromTableId,
+            fromColId,
+            toTableId,
+            toColId,
+            relationType: '1:n'
+        };
+
+        setConnections(prev => {
+            const exists = prev.find(c => c.fromColId === newConn.fromColId && c.toColId === newConn.toColId);
+            if (exists) return prev;
+            return [...prev, newConn];
+        });
+    }, []);
+
+    const removeConnection = useCallback((connId) => {
+        setConnections(prev => prev.filter(c => c.id !== connId));
+    }, []);
+
+    const updateConnection = useCallback((connId, patch) => {
+        setConnections(prev => prev.map(c => c.id === connId ? { ...c, ...patch } : c));
+    }, []);
+
+    // ... generator code...
+    function generateSQL() {
+        const fkMap = {};
+        connections.forEach(conn => {
+            if (!fkMap[conn.fromTableId]) fkMap[conn.fromTableId] = [];
+            
+            const fromTable = tables.find(t => t.id === conn.fromTableId);
+            const toTable = tables.find(t => t.id === conn.toTableId);
+            const fromCol = fromTable?.columns.find(c => c.id === conn.fromColId);
+            const toCol = toTable?.columns.find(c => c.id === conn.toColId);
+
+            if (fromTable && toTable && fromCol && toCol) {
+                fkMap[conn.fromTableId].push({
+                    fromColName: fromCol.name,
+                    toTableName: toTable.name,
+                    toColName: toCol.name
+                });
+            }
+        });
+
+        const snippets = tables.map(t => {
+            const cols = t.columns.map(c => {
+                let line = `  ${c.name} ${c.type}`;
+                if (c.pk && sqlDialect === 'mysql' && !c.type.toLowerCase().includes('auto_increment')) {
+                    line += ' AUTO_INCREMENT';
+                }
+                line += c.nullable ? '' : ' NOT NULL';
+                if (c.defaultValue && c.defaultValue.trim()) {
+                    line += ` DEFAULT ${c.defaultValue}`;
+                }
+                return line;
+            }).join(',\n');
+
+            const pkCols = t.columns.filter(c => c.pk).map(c => c.name);
+            let pkLine = pkCols.length ? `,\n  PRIMARY KEY (${pkCols.join(', ')})` : '';
+
+            return `CREATE TABLE ${t.name} (\n${cols}${pkLine}\n);`;
+        });
+
+        const alterSnippets = [];
+        Object.keys(fkMap).forEach(tableId => {
+            const tableName = tables.find(t => t.id === tableId).name;
+            fkMap[tableId].forEach((fk, idx) => {
+                alterSnippets.push(`ALTER TABLE ${tableName} ADD CONSTRAINT fk_${tableName}_${fk.fromColName} FOREIGN KEY (${fk.fromColName}) REFERENCES ${fk.toTableName} (${fk.toColName});`);
+            });
+        });
+
+        let output = snippets.join('\n\n');
+        if (alterSnippets.length > 0) {
+            output += '\n\n-- Foreign Keys\n\n' + alterSnippets.join('\n');
+        }
+
+        return output;
+    }
+
+    function clearAll() {
+        upop.confirm.warning('¿Estás seguro de que quieres eliminar todas las tablas?', {
+            textoAceptar: 'Eliminar todo',
+            textoCancelar: 'Cancelar',
+            onConfirm: () => {
+                setTables([]);
+                setConnections([]);
+                setSelectedTableId(null);
+                localStorage.removeItem(STORAGE_KEY);
+                upop.toast.success('Diagrama limpiado');
+            }
+        });
+    }
+
+    function importData(data) {
+        if (data.tables && Array.isArray(data.tables)) {
+            setTables(data.tables);
+            setConnections(data.connections || []);
+            if (data.dialect) setSqlDialect(data.dialect);
+        }
+    }
+
+    return {
+        tables,
+        setTables,
+        connections,
+        sqlDialect,
+        setSqlDialect,
+        selectedTableId,
+        setSelectedTableId,
+        searchTerm,
+        setSearchTerm,
+        viewMode,
+        setViewMode,
+        createTable,
+        addColumn,
+        updateColumn,
+        removeColumn,
+        removeTable,
+        duplicateTable,
+        onMouseDownTable,
+        generateSQL,
+        clearAll,
+        importData,
+        canvasRef,
+        
+        connectingFK,
+        startConnection,
+        completeConnection,
+        removeConnection,
+        updateConnection
+    };
+}
