@@ -8,6 +8,8 @@ export default function Toolbar({
     onImport,
     onExportJSON,
     onExportSQL,
+    onExportPrisma,
+    onExportTS,
     onClearAll 
 }) {
     const fileInputRef = useRef(null);
@@ -52,30 +54,57 @@ export default function Toolbar({
                 onChange={handleFileChange} 
                 className="hidden" 
             />
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1.5">
                 <button 
-                    className="text-[12px] font-medium text-text-secondary hover:text-warm-text transition-colors"
+                    className="px-3 py-1.5 bg-warm-bg border border-warm-border rounded-[8px] text-[12px] font-semibold text-text-secondary hover:text-warm-text hover:bg-warm-card transition-all shadow-sm flex items-center"
                     onClick={() => fileInputRef.current?.click()}
                 >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="mr-1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
                     Importar
                 </button>
+            </div>
+
+            <div className="w-px h-5 bg-warm-border mx-1"></div>
+
+            <div className="flex items-center bg-warm-bg border border-warm-border rounded-[8px] p-0.5 shadow-[inset_0_1px_2px_rgba(0,0,0,0.02)]">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-text-secondary/50 flex items-center px-2 mr-1 select-none">
+                    Export
+                </span>
                 <button 
-                    className="text-[12px] font-medium text-text-secondary hover:text-warm-text transition-colors"
+                    className="px-3 py-1 text-[11px] font-bold text-text-secondary hover:text-warm-text hover:bg-warm-card rounded-[6px] transition-all"
                     onClick={() => {
                         onExportJSON();
                         upop.toast.info('JSON Exportado');
                     }}
                 >
-                    Exportar JSON
+                    JSON
                 </button>
                 <button 
-                    className="text-[12px] font-medium text-accent hover:text-accent-hover transition-colors"
+                    className="px-3 py-1 text-[11px] font-bold text-accent hover:text-accent-hover hover:bg-accent/10 rounded-[6px] transition-all"
                     onClick={() => {
                         onExportSQL();
                         upop.toast.info('SQL Exportado');
                     }}
                 >
-                    Exportar SQL
+                    SQL
+                </button>
+                <button 
+                    className="px-3 py-1 text-[11px] font-bold text-[#5a67d8] hover:text-[#434190] hover:bg-[#5a67d8]/10 rounded-[6px] transition-all"
+                    onClick={() => {
+                        onExportPrisma();
+                        upop.toast.info('Prisma Exportado');
+                    }}
+                >
+                    Prisma
+                </button>
+                <button 
+                    className="px-3 py-1 text-[11px] font-bold text-[#2b6cb0] hover:text-[#2c5282] hover:bg-[#2b6cb0]/10 rounded-[6px] transition-all"
+                    onClick={() => {
+                        onExportTS();
+                        upop.toast.info('Typescript Exportado');
+                    }}
+                >
+                    TS Types
                 </button>
             </div>
             

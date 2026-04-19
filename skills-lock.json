@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "skills": {
+    "database-schema-designer": {
+      "source": "softaworks/agent-toolkit",
+      "sourceType": "github",
+      "computedHash": "f23c909d45c6207e974dbce0db4c648de13d586abb37057cfec34d62f25bb526"
+    },
+    "find-skills": {
+      "source": "vercel-labs/skills",
+      "sourceType": "github",
+      "computedHash": "9e1c8b3103f92fa8092568a44fe64858de7c5c9dc65ce4bea8f168080e889cfd"
+    },
+    "game-changing-features": {
+      "source": "softaworks/agent-toolkit",
+      "sourceType": "github",
+      "computedHash": "957248a5654c01fe82186b4b31199b0c618a9375c1d0024fd66568afbe12c48f"
+    },
+    "improve-codebase-architecture": {
+      "source": "mattpocock/skills",
+      "sourceType": "github",
+      "computedHash": "92ffd85a803661d754221f7aba260ee2065d3402eadf78872e227146fe1d6fbf"
+    },
+    "web-design-guidelines": {
+      "source": "vercel-labs/agent-skills",
+      "sourceType": "github",
+      "computedHash": "f3bc47f890f42a44db1007ab390709ec368e4b8c089baee6b0007182236ac474"
+    }
+  }
+}

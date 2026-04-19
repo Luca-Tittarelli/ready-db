@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Analytics } from "@vercel/analytics/react"
 import Header from './components/Header';
 import Toolbar from './components/Toolbar';
@@ -6,13 +6,44 @@ import Canvas from './components/Canvas';
 import Inspector from './components/Inspector';
 import TableModal from './components/modals/TableModal';
 import PreviewModal from './components/modals/PreviewModal';
+import ImportSQLModal from './components/modals/ImportSQLModal';
+import TemplatesModal from './components/modals/TemplatesModal';
+import CommandPalette from './components/CommandPalette';
 import { useDBState } from './hooks/useDBState';
+import { generatePrismaSchema, generateTypescript } from './utils/generators';
 
 export default function App() {
     const dbState = useDBState();
     
     const [showTableForm, setShowTableForm] = useState(false);
     const [showPreview, setShowPreview] = useState(false);
+    const [showCommandPalette, setShowCommandPalette] = useState(false);
+    const [showImportSQL, setShowImportSQL] = useState(false);
+    const [showTemplates, setShowTemplates] = useState(false);
+
+    useEffect(() => {
+        const handleKeyDown = (e) => {
+            if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+                e.preventDefault();
+                setShowCommandPalette(prev => !prev);
+            }
+            // Undo: Ctrl+Z
+            if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey) {
+                // Don't intercept if user is typing in an input
+                if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+                e.preventDefault();
+                dbState.undo();
+            }
+            // Redo: Ctrl+Shift+Z or Ctrl+Y
+            if ((e.metaKey || e.ctrlKey) && ((e.key === 'z' && e.shiftKey) || e.key === 'y')) {
+                if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+                e.preventDefault();
+                dbState.redo();
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [dbState.undo, dbState.redo]);
 
     const handleCreateTable = (name) => {
         dbState.createTable(name);
@@ -44,6 +75,44 @@ export default function App() {
         a.download = `schema-${dbState.sqlDialect}.sql`;
         a.click();
         URL.revokeObjectURL(url);
+    };
+
+    const handleExportPrisma = () => {
+        const prisma = generatePrismaSchema(dbState.tables, dbState.connections);
+        const blob = new Blob([prisma], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `schema.prisma`;
+        a.click();
+        URL.revokeObjectURL(url);
+    };
+
+    const handleExportTS = () => {
+        const ts = generateTypescript(dbState.tables, dbState.connections);
+        const blob = new Blob([ts], { type: 'text/typescript' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `types.ts`;
+        a.click();
+        URL.revokeObjectURL(url);
+    };
+
+    const handleImportSQL = (parsed) => {
+        dbState.importData({
+            tables: parsed.tables,
+            connections: parsed.connections,
+            dialect: dbState.sqlDialect
+        });
+    };
+
+    const handleApplyTemplate = (data) => {
+        dbState.importData({
+            tables: data.tables,
+            connections: data.connections,
+            dialect: dbState.sqlDialect
+        });
     };
 
     const handleCopySQLTable = () => {
@@ -80,6 +149,12 @@ export default function App() {
                 setSqlDialect={dbState.setSqlDialect}
                 onShowPreview={() => setShowPreview(true)}
                 onShowNewTable={() => setShowTableForm(true)}
+                onShowImportSQL={() => setShowImportSQL(true)}
+                onShowTemplates={() => setShowTemplates(true)}
+                canUndo={dbState.canUndo}
+                canRedo={dbState.canRedo}
+                onUndo={dbState.undo}
+                onRedo={dbState.redo}
             />
             
             {dbState.viewMode === 'design' && (
@@ -90,6 +165,8 @@ export default function App() {
                     onImport={dbState.importData}
                     onExportJSON={handleExportJSON}
                     onExportSQL={handleExportSQL}
+                    onExportPrisma={handleExportPrisma}
+                    onExportTS={handleExportTS}
                     onClearAll={dbState.clearAll}
                 />
             )}
@@ -117,6 +194,9 @@ export default function App() {
                     completeConnection={dbState.completeConnection}
                     removeConnection={dbState.removeConnection}
                     updateConnection={dbState.updateConnection}
+
+                    onApplyTemplate={handleApplyTemplate}
+                    onShowImportSQL={() => setShowImportSQL(true)}
                 />
                 
                 {dbState.viewMode === 'design' && (
@@ -140,6 +220,33 @@ export default function App() {
                     sql={dbState.generateSQL()}
                 />
             )}
+
+            {showImportSQL && (
+                <ImportSQLModal 
+                    onClose={() => setShowImportSQL(false)}
+                    onImport={handleImportSQL}
+                />
+            )}
+
+            {showTemplates && (
+                <TemplatesModal 
+                    onClose={() => setShowTemplates(false)}
+                    onApply={handleApplyTemplate}
+                />
+            )}
+
+            <CommandPalette 
+                isOpen={showCommandPalette}
+                onClose={() => setShowCommandPalette(false)}
+                dbState={dbState}
+                onShowNewTable={() => setShowTableForm(true)}
+                onExportJSON={handleExportJSON}
+                onExportSQL={handleExportSQL}
+                onExportPrisma={handleExportPrisma}
+                onExportTS={handleExportTS}
+                onShowImportSQL={() => setShowImportSQL(true)}
+                onShowTemplates={() => setShowTemplates(true)}
+            />
             
             <Analytics />
         </div>

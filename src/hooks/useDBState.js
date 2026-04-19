@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import upop from 'upop';
+import { generatePrismaSchema, generateTypescript } from '../utils/generators';
 
 const STORAGE_KEY = 'db-maker-design';
 
@@ -81,6 +82,56 @@ export function useDBState() {
     const [viewMode, setViewMode] = useState('design');
 
     const [connectingFK, setConnectingFK] = useState(null);
+
+    // --- Undo/Redo History ---
+    const historyRef = useRef([]);
+    const historyIndexRef = useRef(-1);
+    const isUndoRedoRef = useRef(false);
+    const MAX_HISTORY = 50;
+
+    const pushHistory = useCallback(() => {
+        if (isUndoRedoRef.current) return;
+        const snapshot = JSON.stringify({ tables, connections });
+        // Avoid duplicate consecutive snapshots
+        if (historyRef.current.length > 0 && historyRef.current[historyIndexRef.current] === snapshot) return;
+        // Truncate future states if we're not at the end
+        historyRef.current = historyRef.current.slice(0, historyIndexRef.current + 1);
+        historyRef.current.push(snapshot);
+        if (historyRef.current.length > MAX_HISTORY) historyRef.current.shift();
+        historyIndexRef.current = historyRef.current.length - 1;
+    }, [tables, connections]);
+
+    // Save history on meaningful state changes (debounced slightly)
+    const historyTimer = useRef(null);
+    useEffect(() => {
+        if (historyTimer.current) clearTimeout(historyTimer.current);
+        historyTimer.current = setTimeout(() => pushHistory(), 300);
+    }, [tables, connections, pushHistory]);
+
+    const undo = useCallback(() => {
+        if (historyIndexRef.current <= 0) return;
+        historyIndexRef.current -= 1;
+        const snapshot = JSON.parse(historyRef.current[historyIndexRef.current]);
+        isUndoRedoRef.current = true;
+        setTables(snapshot.tables);
+        setConnections(snapshot.connections);
+        setTimeout(() => { isUndoRedoRef.current = false; }, 50);
+        upop.toast.info('Deshacer');
+    }, []);
+
+    const redo = useCallback(() => {
+        if (historyIndexRef.current >= historyRef.current.length - 1) return;
+        historyIndexRef.current += 1;
+        const snapshot = JSON.parse(historyRef.current[historyIndexRef.current]);
+        isUndoRedoRef.current = true;
+        setTables(snapshot.tables);
+        setConnections(snapshot.connections);
+        setTimeout(() => { isUndoRedoRef.current = false; }, 50);
+        upop.toast.info('Rehacer');
+    }, []);
+
+    const canUndo = historyIndexRef.current > 0;
+    const canRedo = historyIndexRef.current < historyRef.current.length - 1;
 
     // Auto-save
     useEffect(() => {
@@ -321,6 +372,9 @@ export function useDBState() {
 
     // ... generator code...
     function generateSQL() {
+        if (sqlDialect === 'prisma') return generatePrismaSchema(tables, connections);
+        if (sqlDialect === 'typescript') return generateTypescript(tables, connections);
+
         const fkMap = {};
         connections.forEach(conn => {
             if (!fkMap[conn.fromTableId]) fkMap[conn.fromTableId] = [];
@@ -424,6 +478,11 @@ export function useDBState() {
         startConnection,
         completeConnection,
         removeConnection,
-        updateConnection
+        updateConnection,
+
+        undo,
+        redo,
+        canUndo,
+        canRedo
     };
 }

@@ -1,7 +1,10 @@
 import React from 'react';
 import upop from 'upop';
 import TableNode from './TableNode';
-import { Database } from 'lucide-react';
+import { Database, Shield, FileText, ShoppingCart, Building2, Users, KanbanSquare, BarChart3, Plus, Upload } from 'lucide-react';
+import { TEMPLATES } from '../utils/templates';
+
+const ICON_MAP = { Shield, FileText, ShoppingCart, Building2, Users, KanbanSquare, BarChart3 };
 
 export default function Canvas({
     tables,
@@ -24,7 +27,10 @@ export default function Canvas({
     startConnection,
     completeConnection,
     removeConnection,
-    updateConnection
+    updateConnection,
+
+    onApplyTemplate,
+    onShowImportSQL
 }) {
     if (viewMode === 'code') {
         return (
@@ -213,20 +219,58 @@ export default function Canvas({
 
                 {tables.length === 0 && (
                     <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                        <div className="text-center pointer-events-auto max-w-sm">
-                            <div className="w-16 h-16 bg-warm-card border border-warm-border text-text-secondary rounded-2xl flex items-center justify-center mx-auto mb-6">
-                                <Database size={24} strokeWidth={1.5} />
+                        <div className="pointer-events-auto max-w-2xl w-full px-4">
+                            <div className="text-center mb-8">
+                                <div className="w-14 h-14 bg-warm-card border border-warm-border text-text-secondary rounded-2xl flex items-center justify-center mx-auto mb-4">
+                                    <Database size={22} strokeWidth={1.5} />
+                                </div>
+                                <h3 className="text-lg font-bold mb-1.5 text-warm-text">Comienza tu esquema</h3>
+                                <p className="text-[13px] text-text-secondary leading-relaxed max-w-md mx-auto">
+                                    Crea una tabla desde cero, importa SQL existente o elige una plantilla.
+                                </p>
                             </div>
-                            <h3 className="text-lg font-medium mb-2 text-warm-text">Lienzo en blanco</h3>
-                            <p className="text-[14px] mb-8 text-text-secondary leading-relaxed">
-                                Comienza tu diseño estructural agregando la primera entidad.
-                            </p>
-                            <button 
-                                className="px-5 py-2.5 bg-accent text-white rounded-lg hover:bg-accent-hover transition-colors font-medium text-[13px]"
-                                onClick={onShowNewTable}
-                            >
-                                Nueva Tabla
-                            </button>
+
+                            {/* Quick Actions */}
+                            <div className="flex justify-center gap-3 mb-6">
+                                <button 
+                                    className="px-5 py-2.5 bg-accent text-white rounded-lg hover:bg-accent-hover transition-colors font-semibold text-[13px] flex items-center gap-2"
+                                    onClick={onShowNewTable}
+                                >
+                                    <Plus size={15} /> Tabla Vacía
+                                </button>
+                                <button 
+                                    className="px-5 py-2.5 bg-warm-card border border-warm-border text-warm-text rounded-lg hover:bg-white transition-colors font-medium text-[13px] flex items-center gap-2"
+                                    onClick={onShowImportSQL}
+                                >
+                                    <Upload size={15} /> Importar SQL
+                                </button>
+                            </div>
+
+                            {/* Templates */}
+                            <div className="mb-3">
+                                <p className="text-[11px] font-semibold text-text-soft uppercase tracking-widest text-center mb-3">O inicia con una plantilla</p>
+                            </div>
+                            <div className="grid grid-cols-4 gap-2.5">
+                                {TEMPLATES.map(tpl => {
+                                    const IconComp = ICON_MAP[tpl.icon];
+                                    return (
+                                        <button
+                                            key={tpl.id}
+                                            className="bg-warm-card border border-warm-border rounded-xl p-3.5 text-left hover:border-accent/40 hover:shadow-md transition-all group"
+                                            onClick={() => onApplyTemplate(tpl.build())}
+                                        >
+                                            <div 
+                                                className="w-8 h-8 rounded-lg flex items-center justify-center mb-2"
+                                                style={{ backgroundColor: tpl.color + '14', color: tpl.color }}
+                                            >
+                                                {IconComp && <IconComp size={16} strokeWidth={2} />}
+                                            </div>
+                                            <h4 className="font-bold text-[12px] text-warm-text group-hover:text-accent transition-colors leading-tight">{tpl.name}</h4>
+                                            <p className="text-[10px] text-text-secondary mt-0.5 leading-snug">{tpl.description}</p>
+                                        </button>
+                                    );
+                                })}
+                            </div>
                         </div>
                     </div>
                 )}
