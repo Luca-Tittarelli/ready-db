@@ -1,7 +1,9 @@
 import React from 'react';
 import upop from 'upop';
+import { AlertCircle, AlertTriangle, Info, Wrench } from 'lucide-react';
+import { SEVERITY } from '../utils/schemaAnalyzer';
 
-export default function Inspector({ selectedTable, onCopySQL }) {
+export default function Inspector({ selectedTable, tableIssues = [], onCopySQL, onApplyQuickFix }) {
     if (!selectedTable) {
         return (
             <div className="w-72 bg-warm-bg border-l border-warm-border p-8 flex flex-col items-center justify-center text-center flex-none z-10 transition-colors">
@@ -19,6 +21,48 @@ export default function Inspector({ selectedTable, onCopySQL }) {
             </div>
             
             <div className="flex-1 overflow-y-auto p-6 space-y-8">
+                {tableIssues.length > 0 && (
+                    <div>
+                        <h3 className="text-[10px] font-semibold text-text-soft uppercase mb-3">Alertas</h3>
+                        <div className="space-y-3">
+                            {tableIssues.map(issue => {
+                                let Icon = Info;
+                                let colorClass = 'text-accent border-accent/20 bg-accent/5';
+                                if (issue.severity === SEVERITY.ERROR) {
+                                    Icon = AlertCircle;
+                                    colorClass = 'text-error border-error/20 bg-error/5';
+                                } else if (issue.severity === SEVERITY.WARNING) {
+                                    Icon = AlertTriangle;
+                                    colorClass = 'text-warn border-warn/20 bg-warn/5';
+                                }
+                                
+                                return (
+                                    <div key={issue.id + issue.colId} className={`p-3 rounded-lg border ${colorClass}`}>
+                                        <div className="font-semibold text-[12px] flex items-start gap-1.5 mb-1.5">
+                                            <Icon size={14} className="mt-0.5 shrink-0" />
+                                            <span className="leading-tight">{issue.title}</span>
+                                        </div>
+                                        <div className="text-[11px] opacity-80 mb-2 leading-relaxed pl-5">
+                                            {issue.description}
+                                        </div>
+                                        {issue.quickFix && (
+                                            <div className="pl-5">
+                                                <button 
+                                                    onClick={() => onApplyQuickFix(issue.quickFix)}
+                                                    className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider bg-white/50 hover:bg-white px-2 py-1.5 rounded transition-colors"
+                                                    style={{ color: 'inherit' }}
+                                                >
+                                                    <Wrench size={10} /> {issue.quickFix.label}
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
+
                 <div>
                     <h3 className="text-[10px] font-semibold text-text-soft uppercase mb-3">Geometría</h3>
                     <div className="grid grid-cols-2 gap-3">

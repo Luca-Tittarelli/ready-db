@@ -1,4 +1,5 @@
 import React, { memo } from 'react';
+import { getTableSeverity, SEVERITY } from '../utils/schemaAnalyzer';
 
 const COMMON_TYPES = [
     { label: 'SERIAL', value: 'serial' },
@@ -27,6 +28,7 @@ const parseType = (typeStr = '') => {
 
 const TableNode = memo(function TableNode({
     table,
+    tableIssues = [],
     onMouseDown,
     onClick,
     onUpdateColumn,
@@ -37,6 +39,11 @@ const TableNode = memo(function TableNode({
     startConnection,
     completeConnection
 }) {
+    const severity = getTableSeverity(tableIssues);
+    let dotClass = 'bg-success';
+    if (severity === SEVERITY.ERROR) dotClass = 'bg-error animate-pulse';
+    else if (severity === SEVERITY.WARNING) dotClass = 'bg-warn';
+
     return (
         <div
             className="absolute top-0 left-0 w-[310px] bg-warm-card border border-warm-border rounded-xl shadow-[0_4px_12px_rgba(0,0,0,0.02)] hover:shadow-[0_8px_24px_rgba(0,0,0,0.03)] transition-shadow duration-200 z-10"
@@ -52,7 +59,10 @@ const TableNode = memo(function TableNode({
                 onClick={() => onClick(table.id)}
             >
                 <div>
-                    <h3 className="font-bold text-warm-text text-[15px]">{table.name}</h3>
+                    <h3 className="font-bold text-warm-text text-[15px] flex items-center gap-2">
+                        {table.name}
+                        {tableIssues.length > 0 && <div className={`w-2 h-2 rounded-full ${dotClass} shadow-sm`} title={`${tableIssues.length} alertas`} />}
+                    </h3>
                 </div>
                 <div className="flex items-center gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button onClick={(e) => { e.stopPropagation(); onRemove(table.id); }} className="text-text-soft hover:text-error transition-colors" title="Eliminar">

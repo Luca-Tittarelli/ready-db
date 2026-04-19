@@ -14,8 +14,10 @@ const sampleData = {
             color: '#007AFF', // Apple Blue
             columns: [
                 { id: 'sample-1-c1', name: 'id', type: 'serial', pk: true, nullable: false },
-                { id: 'sample-1-c2', name: 'username', type: 'varchar', pk: false, nullable: false },
-                { id: 'sample-1-c3', name: 'email', type: 'varchar', pk: false, nullable: false }
+                { id: 'sample-1-c2', name: 'username', type: 'varchar(50)', pk: false, nullable: false },
+                { id: 'sample-1-c3', name: 'email', type: 'varchar(255)', pk: false, nullable: false },
+                { id: 'sample-1-c4', name: 'created_at', type: 'timestamp', pk: false, nullable: false, defaultValue: 'now()' },
+                { id: 'sample-1-c5', name: 'updated_at', type: 'timestamp', pk: false, nullable: true },
             ]
         },
         {
@@ -27,7 +29,9 @@ const sampleData = {
             columns: [
                 { id: 'sample-2-c1', name: 'id', type: 'serial', pk: true, nullable: false },
                 { id: 'sample-2-c2', name: 'user_id', type: 'integer', pk: false, nullable: false },
-                { id: 'sample-2-c3', name: 'title', type: 'varchar', pk: false, nullable: false }
+                { id: 'sample-2-c3', name: 'title', type: 'varchar(255)', pk: false, nullable: false },
+                { id: 'sample-2-c4', name: 'created_at', type: 'timestamp', pk: false, nullable: false, defaultValue: 'now()' },
+                { id: 'sample-2-c5', name: 'updated_at', type: 'timestamp', pk: false, nullable: true },
             ]
         }
     ],
@@ -82,6 +86,31 @@ export function useDBState() {
     const [viewMode, setViewMode] = useState('design');
 
     const [connectingFK, setConnectingFK] = useState(null);
+
+    // --- Pan & Zoom ---
+    const [zoom, _setZoom] = useState(1);
+    const [pan, _setPan] = useState({ x: 0, y: 0 });
+    const zoomRef = useRef(1);
+    const panRef = useRef({ x: 0, y: 0 });
+
+    const setZoom = useCallback((z) => {
+        zoomRef.current = z;
+        _setZoom(z);
+    }, []);
+
+    const setPan = useCallback((p) => {
+        panRef.current = p;
+        _setPan(p);
+    }, []);
+
+    const getCanvasCoords = useCallback((clientX, clientY) => {
+        if (!canvasRef.current) return { x: 0, y: 0 };
+        const rect = canvasRef.current.getBoundingClientRect();
+        return {
+            x: (clientX - rect.left - panRef.current.x) / zoomRef.current,
+            y: (clientY - rect.top - panRef.current.y) / zoomRef.current
+        };
+    }, []);
 
     // --- Undo/Redo History ---
     const historyRef = useRef([]);
@@ -168,19 +197,19 @@ export function useDBState() {
         setSelectedTableId(id);
     }
 
-    function addColumn(tableId) {
+    function addColumn(tableId, initialProps = {}) {
         setTables(prev => prev.map(t => {
             if (t.id !== tableId) return t;
-            const colId = t.id + '-c' + Date.now();
+            const colId = t.id + '-c' + Date.now() + Math.floor(Math.random()*1000);
             return { 
                 ...t, 
                 columns: [...t.columns, { 
                     id: colId, 
-                    name: 'new_column', 
-                    type: 'varchar(255)', 
-                    pk: false, 
-                    nullable: true,
-                    defaultValue: ''
+                    name: initialProps.name || 'new_column', 
+                    type: initialProps.type || 'varchar(255)', 
+                    pk: initialProps.pk || false, 
+                    nullable: initialProps.nullable !== undefined ? initialProps.nullable : true,
+                    defaultValue: initialProps.defaultValue || ''
                 }] 
             };
         }));
@@ -236,14 +265,18 @@ export function useDBState() {
         if (e.target.tagName.toLowerCase() === 'input' || e.target.tagName.toLowerCase() === 'button' || e.target.closest('.port')) {
             return;
         }
+        
+        e.stopPropagation();
+
+        const coords = getCanvasCoords(e.clientX, e.clientY);
         dragging.current.id = table.id;
-        dragging.current.offsetX = e.clientX - table.x;
-        dragging.current.offsetY = e.clientY - table.y;
+        dragging.current.offsetX = coords.x - table.x;
+        dragging.current.offsetY = coords.y - table.y;
         setSelectedTableId(table.id);
         
         window.addEventListener('mousemove', onMouseMove);
         window.addEventListener('mouseup', onMouseUp);
-    }, []);
+    }, [getCanvasCoords]);
 
     function onMouseMove(e) {
         const id = dragging.current.id;
@@ -255,11 +288,12 @@ export function useDBState() {
 
         // Use requestAnimationFrame for smooth 60fps execution
         dragging.current.requestedFrame = requestAnimationFrame(() => {
+            const coords = getCanvasCoords(e.clientX, e.clientY);
             setTables(prev => prev.map(t => 
                 t.id === id ? { 
                     ...t, 
-                    x: e.clientX - dragging.current.offsetX, 
-                    y: e.clientY - dragging.current.offsetY 
+                    x: coords.x - dragging.current.offsetX, 
+                    y: coords.y - dragging.current.offsetY 
                 } : t
             ));
         });
@@ -281,9 +315,9 @@ export function useDBState() {
         e.preventDefault();
         e.stopPropagation();
         
-        const canvasRect = canvasRef.current.getBoundingClientRect();
-        const startX = e.clientX - canvasRect.left;
-        const startY = e.clientY - canvasRect.top;
+        const coords = getCanvasCoords(e.clientX, e.clientY);
+        const startX = coords.x;
+        const startY = coords.y;
 
         connectionDragging.current.active = true;
         connectionDragging.current.fromTableId = tableId;
@@ -300,7 +334,7 @@ export function useDBState() {
 
         window.addEventListener('mousemove', onConnectionMove);
         window.addEventListener('mouseup', onConnectionUp);
-    }, []);
+    }, [getCanvasCoords]);
 
     function onConnectionMove(e) {
         if (!connectionDragging.current.active) return;
@@ -310,13 +344,13 @@ export function useDBState() {
         }
         
         connectionDragging.current.requestedFrame = requestAnimationFrame(() => {
-            const canvasRect = canvasRef.current.getBoundingClientRect();
+            const coords = getCanvasCoords(e.clientX, e.clientY);
             setConnectingFK(prev => {
                 if (!prev) return null;
                 return {
                     ...prev,
-                    currentX: e.clientX - canvasRect.left + canvasRef.current.scrollLeft,
-                    currentY: e.clientY - canvasRect.top + canvasRef.current.scrollTop
+                    currentX: coords.x,
+                    currentY: coords.y
                 };
             });
         });
@@ -369,6 +403,73 @@ export function useDBState() {
     const updateConnection = useCallback((connId, patch) => {
         setConnections(prev => prev.map(c => c.id === connId ? { ...c, ...patch } : c));
     }, []);
+
+    // --- Canvas Panning & Zoom Handler ---
+    const canvasPanDragging = useRef({ active: false, startX: 0, startY: 0, initialPanX: 0, initialPanY: 0 });
+
+    const onMouseDownCanvas = useCallback((e) => {
+        if (!e.target.classList.contains('canvas-zoom-container') && e.target !== canvasRef.current && e.target.tagName.toLowerCase() !== 'svg') return;
+        
+        canvasPanDragging.current.active = true;
+        canvasPanDragging.current.startX = e.clientX;
+        canvasPanDragging.current.startY = e.clientY;
+        canvasPanDragging.current.initialPanX = panRef.current.x;
+        canvasPanDragging.current.initialPanY = panRef.current.y;
+        
+        window.addEventListener('mousemove', onCanvasMouseMove);
+        window.addEventListener('mouseup', onCanvasMouseUp);
+        setSelectedTableId(null);
+    }, []);
+
+    const onCanvasMouseMove = useCallback((e) => {
+        if (!canvasPanDragging.current.active) return;
+        
+        const dx = e.clientX - canvasPanDragging.current.startX;
+        const dy = e.clientY - canvasPanDragging.current.startY;
+        
+        setPan({
+            x: canvasPanDragging.current.initialPanX + dx,
+            y: canvasPanDragging.current.initialPanY + dy
+        });
+    }, [setPan]);
+
+    const onCanvasMouseUp = useCallback(() => {
+        canvasPanDragging.current.active = false;
+        window.removeEventListener('mousemove', onCanvasMouseMove);
+        window.removeEventListener('mouseup', onCanvasMouseUp);
+    }, [onCanvasMouseMove]);
+
+    useEffect(() => {
+        const canvasEl = canvasRef.current;
+        if (!canvasEl) return;
+        
+        const handleWheel = (e) => {
+            if (viewMode !== 'design') return;
+            e.preventDefault();
+            
+            // Adjust zoom sensitivity 
+            const isTrackpad = Math.abs(e.deltaY) < 50;
+            const zoomSensitivity = isTrackpad ? 0.005 : 0.001; // higher sensitivity for trackpad relative to mouse wheel which comes in larger chunks
+            const delta = -e.deltaY * zoomSensitivity;
+            let newZoom = Math.max(0.1, Math.min(zoomRef.current + delta, 3));
+            
+            const rect = canvasEl.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+            
+            const canvasX = (mouseX - panRef.current.x) / zoomRef.current;
+            const canvasY = (mouseY - panRef.current.y) / zoomRef.current;
+            
+            setZoom(newZoom);
+            setPan({
+                x: mouseX - canvasX * newZoom,
+                y: mouseY - canvasY * newZoom
+            });
+        };
+        
+        canvasEl.addEventListener('wheel', handleWheel, { passive: false });
+        return () => canvasEl.removeEventListener('wheel', handleWheel);
+    }, [viewMode, setPan, setZoom]);
 
     // ... generator code...
     function generateSQL() {
@@ -479,6 +580,12 @@ export function useDBState() {
         completeConnection,
         removeConnection,
         updateConnection,
+
+        zoom,
+        pan,
+        setZoom,
+        setPan,
+        onMouseDownCanvas,
 
         undo,
         redo,

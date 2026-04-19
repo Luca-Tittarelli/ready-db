@@ -1,4 +1,5 @@
 import React from 'react';
+import SchemaHealthBadge from './SchemaHealthBadge';
 
 export default function Header({ 
     viewMode, 
@@ -12,7 +13,9 @@ export default function Header({
     canUndo,
     canRedo,
     onUndo,
-    onRedo
+    onRedo,
+    healthScore,
+    onToggleHealthPanel
 }) {
     return (
         <header className="bg-warm-bg border-b border-warm-border px-8 py-4 flex-none z-40 relative">
@@ -76,6 +79,8 @@ export default function Header({
                 </div>
                 
                 <div className="flex items-center gap-6">
+                    <SchemaHealthBadge score={healthScore} onClick={onToggleHealthPanel} />
+                    
                     <div className="relative group">
                         <select 
                             className="bg-warm-card border border-warm-border text-[13px] font-semibold text-text-secondary focus:outline-none hover:text-warm-text hover:border-text-secondary/40 cursor-pointer appearance-none rounded-[8px] pl-3 pr-8 py-1.5 transition-all shadow-[0_1px_2px_rgba(0,0,0,0.02)]"

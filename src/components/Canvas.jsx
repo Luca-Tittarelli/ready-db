@@ -9,6 +9,7 @@ const ICON_MAP = { Shield, FileText, ShoppingCart, Building2, Users, KanbanSquar
 export default function Canvas({
     tables,
     connections,
+    tableIssues = {},
     selectedTableId,
     canvasRef,
     viewMode,
@@ -30,7 +31,11 @@ export default function Canvas({
     updateConnection,
 
     onApplyTemplate,
-    onShowImportSQL
+    onShowImportSQL,
+
+    zoom = 1,
+    pan = { x: 0, y: 0 },
+    onMouseDownCanvas
 }) {
     if (viewMode === 'code') {
         return (
@@ -103,21 +108,24 @@ export default function Canvas({
                 className="absolute inset-0 pointer-events-none opacity-20"
                 style={{
                     backgroundImage: 'radial-gradient(var(--color-text-soft) 1px, transparent 1px)',
-                    backgroundSize: '32px 32px'
+                    backgroundSize: `${24 * zoom}px ${24 * zoom}px`,
+                    backgroundPosition: `${pan.x}px ${pan.y}px`
                 }}
             ></div>
             
             <div 
                 ref={canvasRef}
-                className="w-full h-full relative overflow-auto z-0 p-8"
+                className="w-full h-full relative overflow-hidden z-0 cursor-grab active:cursor-grabbing"
+                onMouseDown={onMouseDownCanvas}
                 onClick={(e) => {
                     if (e.target === canvasRef.current || e.target.tagName.toLowerCase() === 'svg') {
                         setSelectedTableId(null);
                     }
                 }}
             >
-                {/* SVG Connections Layer */}
-                <svg className="absolute top-0 left-0 pointer-events-none w-full h-full min-w-[3000px] min-h-[3000px] overflow-visible">
+                <div className="canvas-zoom-container" style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`, transformOrigin: '0 0', position: 'absolute', width: '100%', height: '100%' }}>
+                    {/* SVG Connections Layer */}
+                    <svg className="absolute top-0 left-0 pointer-events-none w-full h-full overflow-visible">
                     {connections.map(conn => {
                         const fromCoords = getPortCoords(conn.fromTableId, conn.fromColId);
                         const toCoords = getPortCoords(conn.toTableId, conn.toColId);
@@ -204,6 +212,7 @@ export default function Canvas({
                     <TableNode
                         key={t.id}
                         table={t}
+                        tableIssues={tableIssues[t.id] || []}
                         isSelected={selectedTableId === t.id}
                         onMouseDown={onMouseDownTable}
                         onClick={setSelectedTableId}
@@ -216,6 +225,7 @@ export default function Canvas({
                         completeConnection={completeConnection}
                     />
                 ))}
+                </div>
 
                 {tables.length === 0 && (
                     <div className="absolute inset-0 flex items-center justify-center pointer-events-none">

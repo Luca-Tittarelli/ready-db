@@ -9,8 +9,10 @@ import PreviewModal from './components/modals/PreviewModal';
 import ImportSQLModal from './components/modals/ImportSQLModal';
 import TemplatesModal from './components/modals/TemplatesModal';
 import CommandPalette from './components/CommandPalette';
-import { useDBState } from './hooks/useDBState';
 import { generatePrismaSchema, generateTypescript } from './utils/generators';
+import { analyzeSchema, getTableSeverity } from './utils/schemaAnalyzer';
+import HealthPanel from './components/HealthPanel';
+import { useDBState } from './hooks/useDBState';
 
 export default function App() {
     const dbState = useDBState();
@@ -20,6 +22,30 @@ export default function App() {
     const [showCommandPalette, setShowCommandPalette] = useState(false);
     const [showImportSQL, setShowImportSQL] = useState(false);
     const [showTemplates, setShowTemplates] = useState(false);
+    const [showHealthPanel, setShowHealthPanel] = useState(false);
+
+    const { score, issues, tableIssues } = React.useMemo(() => {
+        return analyzeSchema(dbState.tables, dbState.connections);
+    }, [dbState.tables, dbState.connections]);
+
+    const globalSeverity = getTableSeverity(issues);
+
+    const handleApplyQuickFix = (quickFix) => {
+        if (!quickFix) return;
+        const { action, payload } = quickFix;
+        if (action === 'ADD_PK') {
+            dbState.addColumn(payload.tableId, { name: 'id', pk: true, nullable: false, type: dbState.sqlDialect === 'postgres' ? 'serial' : (dbState.sqlDialect === 'mysql' ? 'int AUTO_INCREMENT' : 'INTEGER') });
+        } else if (action === 'ADD_TIMESTAMPS') {
+            dbState.addColumn(payload.tableId, { name: 'created_at', type: 'timestamp', nullable: true, defaultValue: 'CURRENT_TIMESTAMP' });
+            dbState.addColumn(payload.tableId, { name: 'updated_at', type: 'timestamp', nullable: true });
+        } else if (action === 'ADD_CREATED_AT') {
+            dbState.addColumn(payload.tableId, { name: 'created_at', type: 'timestamp', nullable: true, defaultValue: 'CURRENT_TIMESTAMP' });
+        } else if (action === 'ADD_UPDATED_AT') {
+            dbState.addColumn(payload.tableId, { name: 'updated_at', type: 'timestamp', nullable: true });
+        } else if (action === 'SET_COLUMN_TYPE') {
+            dbState.updateColumn(payload.tableId, payload.colId, { type: payload.type });
+        }
+    };
 
     useEffect(() => {
         const handleKeyDown = (e) => {
@@ -155,6 +181,8 @@ export default function App() {
                 canRedo={dbState.canRedo}
                 onUndo={dbState.undo}
                 onRedo={dbState.redo}
+                healthScore={score}
+                onToggleHealthPanel={() => setShowHealthPanel(!showHealthPanel)}
             />
             
             {dbState.viewMode === 'design' && (
@@ -175,6 +203,7 @@ export default function App() {
                 <Canvas 
                     tables={dbState.tables}
                     connections={dbState.connections}
+                    tableIssues={tableIssues}
                     selectedTableId={dbState.selectedTableId}
                     canvasRef={dbState.canvasRef}
                     viewMode={dbState.viewMode}
@@ -195,15 +224,32 @@ export default function App() {
                     removeConnection={dbState.removeConnection}
                     updateConnection={dbState.updateConnection}
 
+                    zoom={dbState.zoom}
+                    pan={dbState.pan}
+                    onMouseDownCanvas={dbState.onMouseDownCanvas}
+
                     onApplyTemplate={handleApplyTemplate}
                     onShowImportSQL={() => setShowImportSQL(true)}
                 />
                 
                 {dbState.viewMode === 'design' && (
-                    <Inspector 
-                        selectedTable={selectedTable}
-                        onCopySQL={handleCopySQLTable}
-                    />
+                    selectedTable ? (
+                        <Inspector 
+                            selectedTable={selectedTable}
+                            tableIssues={tableIssues[selectedTable.id] || []}
+                            onCopySQL={handleCopySQLTable}
+                            onApplyQuickFix={handleApplyQuickFix}
+                        />
+                    ) : showHealthPanel ? (
+                        <HealthPanel 
+                            score={score}
+                            issues={issues}
+                            onSelectTable={dbState.setSelectedTableId}
+                            onApplyQuickFix={handleApplyQuickFix}
+                        />
+                    ) : (
+                        <Inspector selectedTable={null} />
+                    )
                 )}
             </div>
 
